@@ -40,8 +40,8 @@ public class NavAgentExample : MonoBehaviour {
             agent.destination = nextWaypointTransform.position;
             return;
         }
-        
-        currentIndex++;
+
+        currentIndex = nextWaypoint;
     }
 
 	// Update is called once per frame
