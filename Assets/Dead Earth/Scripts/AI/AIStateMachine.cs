@@ -1,0 +1,326 @@
+﻿using System.Collections;
+using System.Collections.Generic; 
+using UnityEngine;
+using UnityEngine.AI;
+
+public enum AIStateType         { None, Idle, Alerted, Patrol, Attack, Feeding, Pursuit, Dead }
+public enum AITargetType        { None, Waypoint, Visual_Player, Visual_Light, Visual_Food, Audio }
+public enum AITriggerEventType  { Enter, Stay, Exit }
+
+//-----------------------------------------------------------------------------------
+// Class    : AITarget
+// Desc     : Description of a potention target for  the AI System  
+//-----------------------------------------------------------------------------------
+public struct AITarget
+{
+    private AITargetType    _type;          // Target Type
+    private Collider        _collider;      // The collider
+    private Vector3         _position;      // Current position in the world
+    private float           _distance;      // Distance from the player
+    private float           _time;          // Time the target was last pinged
+
+    public AITargetType     type     { get { return _type; } }
+    public Collider         collider { get { return _collider; } }
+    public Vector3          position { get { return _position; } }
+    public float            distance { get { return _distance; } set { _distance = value; } }
+    public float            time     { get { return _time; } }
+
+    public void Set (AITargetType type, Collider collider, Vector3 position, float distance)
+    {
+        _type       = type;
+        _collider   = collider;
+        _position   = position;
+        _distance   = distance;
+        _time       = Time.time;
+    }
+
+    public void Clear()
+    {
+        _type       = AITargetType.None;
+        _collider   = null;
+        _position   = Vector3.zero;
+        _distance   = Mathf.Infinity;
+        _time       = 0.0f;    
+    }
+}
+
+//-----------------------------------------------------------------------------------
+// Class    : AIStateMachine
+// Desc     : The Base Class for all the AI State Machines  
+//-----------------------------------------------------------------------------------
+
+public abstract class AIStateMachine : MonoBehaviour
+{
+    public AITarget VisualThreat = new AITarget();
+    public AITarget AudioThreat = new AITarget();
+
+    protected AIState _currentState = null;
+    protected Dictionary<AIStateType, AIState> _states = new Dictionary<AIStateType, AIState>();
+    protected AITarget _target = new AITarget();
+    protected int _rootPositionRefCount = 0;
+    protected int _rootRotationRefCount = 0;
+
+    [SerializeField] protected AIStateType _currentStateType = AIStateType.Idle;
+    [SerializeField] protected SphereCollider _targetTrigger = null;
+    [SerializeField] protected SphereCollider _sensorTrigger = null;
+
+    [SerializeField] [Range(0, 15)] protected float _stoppingDistance = 1.0f;
+
+    // Component cache
+    protected Animator _animator = null;
+    protected NavMeshAgent _navAgent = null;
+    protected Collider _collider = null;
+    protected Transform _transform = null;
+
+    public Animator animator { get { return _animator; } }
+    public NavMeshAgent navAgent { get { return _navAgent; } }
+
+    public Vector3 sensorPosistion
+    {
+        get
+        {
+            if (_sensorTrigger == null)
+            {
+                return Vector3.zero;
+            }
+
+            Vector3 point = _sensorTrigger.transform.position;
+            point.x += _sensorTrigger.center.x * _sensorTrigger.transform.lossyScale.x;
+            point.y += _sensorTrigger.center.y * _sensorTrigger.transform.lossyScale.y;
+            point.z += _sensorTrigger.center.z * _sensorTrigger.transform.lossyScale.z;
+            return point;
+        }
+    }
+
+    public float sensorRadius
+    {
+        get
+        {
+            if (_sensorTrigger == null)
+            {
+                return 0.0f;
+            }
+
+            float radius = Mathf.Max(_sensorTrigger.radius * _sensorTrigger.transform.lossyScale.x, _sensorTrigger.radius * _sensorTrigger.transform.lossyScale.y);
+            return Mathf.Max(radius, _sensorTrigger.radius * _sensorTrigger.transform.position.z);
+        }
+    }
+
+    public bool useRootPosition { get { return _rootPositionRefCount > 0; } }
+    public bool useRootRotation { get { return _rootRotationRefCount > 0; } }
+
+    protected virtual void Awake()
+    {
+        _transform = transform;
+        _animator = GetComponent<Animator>();
+        _navAgent = GetComponent<NavMeshAgent>();
+        _collider = GetComponent<Collider>();
+
+        if (GameSceneManager.instance != null)
+        {
+            if (_collider) GameSceneManager.instance.RegisterAIStateMachine(_collider.GetInstanceID(), this);
+            if (_sensorTrigger) GameSceneManager.instance.RegisterAIStateMachine(_sensorTrigger.GetInstanceID(), this);
+        }
+    }
+
+    protected virtual void Start()
+    {
+        if(_sensorTrigger != null)
+        {
+            AISensor script = _sensorTrigger.GetComponent<AISensor>();
+            if (script != null)
+            {
+                script.parentStateMachine = this;
+            }
+        }
+
+        //Get all states on this GO
+        AIState[] states = GetComponents<AIState>();
+
+        // Add states too the state dictionary
+        foreach (AIState state in states)
+        {
+            if (state != null && !_states.ContainsKey(state.GetStateType()))
+            {
+                // Add state to dictionary
+                _states[state.GetStateType()] = state;
+                state.SetStateMachine(this);
+            }
+        }
+
+        if (_states.ContainsKey(_currentStateType))
+        {
+            _currentState = _states[_currentStateType];
+            _currentState.OnExitState();
+        }
+        else
+        {
+            _currentState = null;
+        }
+
+        if (animator)
+        {
+            AIStateMachineLink[] scripts = _animator.GetBehaviours<AIStateMachineLink>();
+
+            foreach (AIStateMachineLink script in scripts)
+            {
+                script.stateMachine = this;
+            }
+
+        }
+       
+    }
+
+    public void SetTarget(AITargetType type, Collider collider, Vector3 position, float distance)
+    {
+        _target.Set(type, collider, position, distance);
+
+        if (_targetTrigger != null)
+        {
+            _targetTrigger.radius = _stoppingDistance;
+            _targetTrigger.transform.position = _target.position;
+            _targetTrigger.enabled = true;
+        }
+    }
+
+    public void SetTarget(AITargetType type, Collider collider, Vector3 position, float distance, float stoppingDistance)
+    {
+        _target.Set(type, collider, position, distance);
+
+        if (_targetTrigger != null)
+        {
+            _targetTrigger.radius = stoppingDistance;
+            _targetTrigger.transform.position = _target.position;
+            _targetTrigger.enabled = true;
+        }
+    }
+
+    public void SetTarget(AITarget type)
+    {
+        //Set new target
+        _target = type;
+
+        if (_targetTrigger != null)
+        {
+            _targetTrigger.radius = _stoppingDistance;
+            _targetTrigger.transform.position = type.position;
+            _targetTrigger.enabled = true;
+        }
+    }
+
+    public void ClearTarget()
+    {
+        _target.Clear();
+
+        if (_targetTrigger != null)
+        {
+            _targetTrigger.enabled = false;
+        }
+    }
+
+    protected virtual void FixedUpdate()
+    {
+        VisualThreat.Clear();
+        AudioThreat.Clear();
+
+        if (_target.type != AITargetType.None)
+        {
+            _target.distance = Vector3.Distance(_transform.position, _target.position);
+        }
+    }
+
+    protected virtual void Update()
+    {
+        if (_currentState == null) { return; }
+
+        AIStateType newStateType = _currentState.OnUpdate();
+
+        if (newStateType != _currentStateType)
+        {
+            AIState newState = null;
+            if (_states.TryGetValue(newStateType, out newState))
+            {
+                _currentState.OnExitState();
+                newState.OnExitState();
+                _currentState = newState;
+            }
+            else
+            if (_states.TryGetValue(AIStateType.Idle, out newState))
+            {
+                _currentState.OnExitState();
+                newState.OnExitState();
+                _currentState = newState;
+            }
+
+            _currentStateType = newStateType;
+        }
+    }
+
+    // Called by physics system then Ai main collider enter its own trigger.
+    // This will alway the state to know if it entered a waypoint of player last seen posistion
+    protected virtual void OnTriggerEnter(Collider other)
+    {
+        if (_targetTrigger == null || other != _targetTrigger)
+        {
+            return;
+        }
+
+        if (_currentState)
+        {
+            _currentState.OnDestinationReached(true);
+        }
+    }
+
+    protected void OnTriggerExit(Collider other)
+    {
+        if (_targetTrigger == null || _targetTrigger != other)
+        {
+            return;
+        }
+
+        if(_currentState != null)
+        {
+            _currentState.OnDestinationReached(false);
+        }
+    }
+
+    public virtual void OnTriggerEvent(AITriggerEventType type, Collider other)
+    {
+        if(_currentState != null)
+        {
+            _currentState.OnTriggerEvent(type, other);
+        }
+    }
+
+    protected virtual void OnAnimatorMove()
+    {
+        if(_currentState != null)
+        {
+            _currentState.OnAnimatorUpdated();
+        }
+    }
+
+    protected virtual void OnAnimatorIK(int layerIndex)
+    {
+        if (_currentState != null)
+        {
+            _currentState.OnAnimatorIKUpdated();
+        }
+    }
+
+    public void NavAgentControl(bool positionUpdate, bool rotationUpdate)
+    {
+        if (_navAgent)
+        {
+            _navAgent.updatePosition = positionUpdate;
+            _navAgent.updateRotation = rotationUpdate;
+        }
+    }
+
+    public void AddRootMotionRequest(int rootPosition,int rootRotation)
+    {
+        _rootPositionRefCount += rootPosition;
+        _rootRotationRefCount += rootRotation;
+    }
+
+}
