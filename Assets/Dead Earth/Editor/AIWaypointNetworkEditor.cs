@@ -17,8 +17,8 @@ public class AIWaypointNetworkEditor : Editor
 
         if (network.displayMode == PathDisplayMode.Paths)
         {
-            network.uiStart = EditorGUILayout.IntSlider("Waypoint Start", network.uiStart, 0, network.waypoints.Count - 1);
-            network.uiEnd = EditorGUILayout.IntSlider("Waypoint End", network.uiEnd, 0, network.waypoints.Count - 1);
+            network.uiStart = EditorGUILayout.IntSlider("Waypoint Start", network.uiStart, 0, network.Waypoints.Count - 1);
+            network.uiEnd = EditorGUILayout.IntSlider("Waypoint End", network.uiEnd, 0, network.Waypoints.Count - 1);
         }
 
         DrawDefaultInspector();
@@ -30,27 +30,27 @@ public class AIWaypointNetworkEditor : Editor
 
         AIWaypointNetwork network = (AIWaypointNetwork)target;
 
-        for (int i = 0; i < network.waypoints.Count; i++)
+        for (int i = 0; i < network.Waypoints.Count; i++)
         {
-            if (network.waypoints[i] != null)
+            if (network.Waypoints[i] != null)
             {
-                Handles.Label(network.waypoints[i].position, "Waypoint " + i.ToString(), style);
+                Handles.Label(network.Waypoints[i].position, "Waypoint " + i.ToString(), style);
             }
         }
 
         if (network.displayMode == PathDisplayMode.Connections)
         {
-            Vector3[] linePoints = new Vector3[network.waypoints.Count + 1];
+            Vector3[] linePoints = new Vector3[network.Waypoints.Count + 1];
 
             for (int i = 0; i < linePoints.Length; i++)
             {
-                int index = i != network.waypoints.Count ? i : 0;
+                int index = i != network.Waypoints.Count ? i : 0;
 
-                if(network.waypoints.Count > 0)
+                if(network.Waypoints.Count > 0)
                 {
-                    if (network.waypoints[index] != null)
+                    if (network.Waypoints[index] != null)
                     {
-                        linePoints[i] = network.waypoints[index].position;
+                        linePoints[i] = network.Waypoints[index].position;
                     }
                     else
                     {
@@ -65,10 +65,10 @@ public class AIWaypointNetworkEditor : Editor
         {
             NavMeshPath path    = new NavMeshPath();
 
-            if(network.waypoints[network.uiStart] != null && network.waypoints[network.uiEnd] != null)
+            if(network.Waypoints[network.uiStart] != null && network.Waypoints[network.uiEnd] != null)
             {
-                Vector3 from        = network.waypoints[network.uiStart].position;
-                Vector3 to          = network.waypoints[network.uiEnd].position;
+                Vector3 from        = network.Waypoints[network.uiStart].position;
+                Vector3 to          = network.Waypoints[network.uiEnd].position;
 
                 NavMesh.CalculatePath(from, to, NavMesh.AllAreas, path);
 

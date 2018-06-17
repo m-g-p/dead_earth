@@ -65,8 +65,8 @@ public class NavAgentNoRootMotion : MonoBehaviour
         Transform nextWaypointTransform = null;
 
         // Calculate index of next waypoint factoring in the increment with wrap-around and fetch waypoint 
-        int nextWaypoint = (CurrentIndex + incStep >= WaypointNetwork.waypoints.Count) ? 0 : CurrentIndex + incStep;
-        nextWaypointTransform = WaypointNetwork.waypoints[nextWaypoint];
+        int nextWaypoint = (CurrentIndex + incStep >= WaypointNetwork.Waypoints.Count) ? 0 : CurrentIndex + incStep;
+        nextWaypointTransform = WaypointNetwork.Waypoints[nextWaypoint];
 
         // Assuming we have a valid waypoint transform
         if (nextWaypointTransform != null)

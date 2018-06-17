@@ -9,5 +9,5 @@ public class AIWaypointNetwork : MonoBehaviour
     [HideInInspector] public PathDisplayMode displayMode = PathDisplayMode.Connections;
     [HideInInspector] public int uiStart  = 0;
     [HideInInspector] public int uiEnd    = 0;
-	public List<Transform> waypoints = new List<Transform>();
+	public List<Transform> Waypoints = new List<Transform>();
 }
