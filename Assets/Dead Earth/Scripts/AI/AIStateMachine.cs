@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
-using UnityEngine.AI;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEngine.AI;
 
 // Public Enums of the AI System
 public enum AIStateType { None, Idle, Alerted, Patrol, Attack, Feeding, Pursuit, Dead }
@@ -105,6 +105,8 @@ public abstract class AIStateMachine : MonoBehaviour
 
     public bool useRootPosition { get { return _rootPositionRefCount > 0; } }
     public bool useRootRotation { get { return _rootRotationRefCount > 0; } }
+    public AITargetType targetType { get { return _target.type; } }
+    public Vector3 targetPosition { get { return _target.position; } }
 
     // -----------------------------------------------------------------
     // Name	:	Awake
